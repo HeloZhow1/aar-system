@@ -1,0 +1,64 @@
+// ============================================================
+// SML & AAR 智能管理系统 - 数据模型
+// 设计理念：单一数据源 (SML为静态主数据) + 动态追踪 (SampleTracking)
+//           + 评审留痕 (AarResult)，三表通过外键串联。
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- 1. SML 静态定义表 ----------
+// 存储零件的"身份证"信息，一般在项目启动时确定，低频变更
+model Sml {
+  id           Int      @id @default(autoincrement())
+  partNumber   String   @unique
+  partName     String
+  colorCode    String
+  configLevel  String
+  dreOwner     String
+  supplier     String
+  createdAt    DateTime @default(now())
+
+  trackings    SampleTracking[]
+}
+
+// ---------- 2. SampleTracking 送样追踪表 ----------
+// 动态数据，每一轮送样都会新增一条记录，体现时间线
+model SampleTracking {
+  id           Int       @id @default(autoincrement())
+  smlId        Int
+  round        String
+  plannedDate  DateTime
+  actualDate   DateTime?
+  status       String
+  remark       String?
+
+  sml          Sml         @relation(fields: [smlId], references: [id], onDelete: Cascade)
+  result       AarResult?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([smlId, round])
+}
+
+// ---------- 3. AarResult 评审结果表 ----------
+// 记录每轮样件的客观测量值 + 主观评价，是生成 AAR 报告的数据源
+model AarResult {
+  id               Int      @id @default(autoincrement())
+  trackingId       Int      @unique
+  deltaE           Float
+  glossValue       Float
+  subjectiveReview String
+  isApproved       Boolean  @default(false)
+
+  tracking         SampleTracking @relation(fields: [trackingId], references: [id], onDelete: Cascade)
+
+  createdAt        DateTime @default(now())
+}
